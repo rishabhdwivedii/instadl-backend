@@ -17,19 +17,22 @@ async function getPostLink(url) {
     const root = parse(response.data);
 
     if (response.data.includes("video_url")) {
-      return getVideoLinkFromHtml(response.data);
+      return { type: "video", url: getVideoLinkFromHtml(response.data) };
     } else {
       const imgElement = root.querySelector("img.EmbeddedMediaImage");
       if (imgElement) {
-        return imgElement.getAttribute("src").replace(/&amp;/g, "&");
+        return {
+          type: "image",
+          url: imgElement.getAttribute("src").replace(/&amp;/g, "&"),
+        };
       } else {
         console.error("Image element not found");
-        return "";
+        return { type: "unknown", url: "" };
       }
     }
   } catch (error) {
     console.error("Error fetching post link:", error);
-    return "";
+    return { type: "error", url: "" };
   }
 }
 
@@ -40,10 +43,27 @@ function getVideoLinkFromHtml(html) {
 
 app.get("/instagram-post", async (req, res) => {
   const result = await getPostLink(instagramPostLink);
-  if (result) {
-    res.json({ link: result });
+  if (result.url) {
+    res.json(result);
   } else {
     res.status(500).json({ error: "Failed to fetch Instagram post link" });
+  }
+});
+
+app.get("/media-proxy", async (req, res) => {
+  const mediaUrl = req.query.url;
+
+  if (!mediaUrl) {
+    return res.status(400).json({ error: "No URL provided" });
+  }
+
+  try {
+    const response = await axios.get(mediaUrl, { responseType: "stream" });
+    res.setHeader("Content-Type", response.headers["content-type"]);
+    response.data.pipe(res);
+  } catch (error) {
+    console.error("Error proxying media:", error);
+    res.status(500).json({ error: "Failed to fetch media" });
   }
 });
 
