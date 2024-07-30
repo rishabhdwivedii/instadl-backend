@@ -10,6 +10,29 @@ app.use(cors());
 
 const instagramPostLink = "https://www.instagram.com/p/C89W94RJVsM/";
 
+const apiUrl =
+  "https://i.instagram.com/api/v1/users/web_profile_info/?username=rishabhdwivedii";
+const userAgent =
+  "Instagram 337.0.0.0.77 Android (28/9; 420dpi; 1080x1920; samsung; SM-G611F; on7xreflte; samsungexynos7870; en_US; 493419337)";
+
+// Route to get Instagram profile picture link
+app.get("/profile-pic", async (req, res) => {
+  try {
+    const response = await axios.get(apiUrl, {
+      headers: {
+        "User-Agent": userAgent,
+      },
+    });
+
+    const profilePicUrlHD = response.data.data.user.profile_pic_url_hd;
+
+    res.json({ profilePicUrl: profilePicUrlHD });
+  } catch (error) {
+    console.error("User not found or error occurred:", error.message);
+    res.status(500).json({ error: "User not found or error occurred" });
+  }
+});
+
 async function getPostLink(url) {
   try {
     url = url + "embed/captioned";
