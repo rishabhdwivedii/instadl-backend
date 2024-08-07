@@ -1,6 +1,8 @@
 const express = require("express");
 const axios = require("axios");
 const { parse } = require("node-html-parser");
+const puppeteer = require("puppeteer");
+
 const cors = require("cors");
 
 const app = express();
@@ -87,6 +89,80 @@ app.get("/media-proxy", async (req, res) => {
   } catch (error) {
     console.error("Error proxying media:", error);
     res.status(500).json({ error: "Failed to fetch media" });
+  }
+});
+
+//for reels
+process.on("unhandledRejection", (reason, promise) => {
+  if (reason.message !== "Navigating frame was detached") {
+    console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  }
+});
+
+const getInstagramReel = async (instagramReelURL) => {
+  let browser;
+  let downloadLinks = [];
+  try {
+    browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+
+    const userAgents = [
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.48",
+    ];
+
+    const randomUserAgent =
+      userAgents[Math.floor(Math.random() * userAgents.length)];
+    console.log("UserAgent : " + randomUserAgent);
+    await page.setUserAgent(randomUserAgent);
+
+    const WebsiteURL = "https://snapinsta.app";
+
+    await page.goto(WebsiteURL, { waitUntil: "networkidle2", timeout: 60000 });
+
+    await page.waitForSelector("#url");
+
+    await page.$eval(
+      'input[name="url"]',
+      (el, value) => (el.value = value),
+      instagramReelURL
+    );
+
+    await page.waitForSelector('button[type="submit"]');
+    await page.$eval('button[type="submit"]', (button) => button.click());
+
+    await page.waitForSelector(".download-bottom");
+
+    const href = await page.$eval(".download-bottom a", (a) => a.href);
+
+    downloadLinks.push(href);
+
+    return downloadLinks;
+  } catch (error) {
+    console.error(error);
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+};
+
+app.get("/reels", async (req, res) => {
+  const { url } = req.query;
+  if (!url) {
+    await page.goto(WebsiteURL, { waitUntil: "networkidle2", timeout: 60000 });
+    return res.status(400).send("URL parameter is required");
+  }
+
+  try {
+    const reelLinks = await getInstagramReel(url);
+    res.status(200).json({ links: reelLinks });
+  } catch (error) {
+    console.error("Error fetching Instagram reel:", error);
+    res.status(500).send("An error occurred while fetching the Instagram reel");
   }
 });
 
