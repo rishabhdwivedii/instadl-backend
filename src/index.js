@@ -17,7 +17,7 @@ const apiUrl =
 const userAgent =
   "Instagram 337.0.0.0.77 Android (28/9; 420dpi; 1080x1920; samsung; SM-G611F; on7xreflte; samsungexynos7870; en_US; 493419337)";
 
-// Route to get Instagram profile picture link
+// profile picture
 app.get("/profile-pic", async (req, res) => {
   try {
     const response = await axios.get(apiUrl, {
@@ -163,6 +163,88 @@ app.get("/reels", async (req, res) => {
   } catch (error) {
     console.error("Error fetching Instagram reel:", error);
     res.status(500).send("An error occurred while fetching the Instagram reel");
+  }
+});
+
+//for stories
+process.on("unhandledRejection", (reason, promise) => {
+  if (reason.message !== "Navigating frame was detached") {
+    console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  }
+});
+
+const getInstagramStories = async (instagramStoriesURL) => {
+  let browser;
+  let page;
+  let downloadLinks = [];
+  try {
+    browser = await puppeteer.launch({ headless: true });
+    page = await browser.newPage();
+
+    const userAgents = [
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.48",
+    ];
+
+    const randomUserAgent =
+      userAgents[Math.floor(Math.random() * userAgents.length)];
+    console.log("UserAgent : " + randomUserAgent);
+    await page.setUserAgent(randomUserAgent);
+
+    const WebsiteURL = "https://fastdl.app/story-saver";
+
+    await page.goto(WebsiteURL, { waitUntil: "networkidle2", timeout: 60000 });
+
+    await page.waitForSelector("#search-form-input");
+
+    await page.$eval(
+      "#search-form-input",
+      (el, value) => {
+        el.value = value;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      },
+      instagramStoriesURL
+    );
+
+    await page.click(".search-form__button");
+
+    await page.waitForSelector(".output-list__item", { timeout: 60000 });
+
+    const downloadLinks = await page.$$eval(
+      ".button.button--filled.button__download",
+      (elements) => elements.map((el) => el.href)
+    );
+
+    return downloadLinks;
+  } catch (error) {
+    if (page) {
+      await page.screenshot({ path: "error_screenshot.png" });
+    }
+    console.error(error);
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+};
+
+app.get("/stories", async (req, res) => {
+  const { url } = req.query;
+  if (!url) {
+    return res.status(400).send("URL parameter is required");
+  }
+
+  try {
+    const storiesLinks = await getInstagramStories(url);
+    res.status(200).json({ links: storiesLinks });
+  } catch (error) {
+    console.error("Error fetching Instagram stories:", error);
+    res
+      .status(500)
+      .send("An error occurred while fetching the Instagram stories");
   }
 });
 
